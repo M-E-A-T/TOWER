@@ -67,7 +67,6 @@ def remove_gray_bar(frame, max_check_rows=50, std_threshold=10):
     """
     gray_bar_height = 0
     h = frame.shape[0]
-    # Only check up to the frame's height (in case it's very short)
     for i in range(min(max_check_rows, h)):
         row = frame[i, :, :]
         if np.std(row) < std_threshold:
@@ -75,8 +74,6 @@ def remove_gray_bar(frame, max_check_rows=50, std_threshold=10):
         else:
             break
     if gray_bar_height > 0:
-        # Uncomment the next line to see how many rows were removed for debugging
-        # print(f"Removed gray bar height: {gray_bar_height} pixels")
         return frame[gray_bar_height:, :], gray_bar_height
     return frame, 0
 
@@ -93,14 +90,13 @@ while True:
     # Mirror the image
     frame = cv2.flip(frame, 1)
 
-    # ----- Dynamic Gray Bar Removal -----
-    # Detect and crop out the gray bar on top if present.
+    # Dynamic Gray Bar Removal
     frame, removed_height = remove_gray_bar(frame, max_check_rows=50, std_threshold=10)
 
     # Update dimensions after crop
     orig_h, orig_w = frame.shape[:2]
 
-    # Convert to RGB for MediaPipe
+    # Convert to RGB for MediaPipe processing
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_detection.process(rgb_frame)
 
@@ -127,8 +123,7 @@ while True:
             assigned_color = None
             for tracked in tracked_faces:
                 prev_cx, prev_cy = tracked['center']
-                dist = math.hypot(cx - prev_cx, cy - prev_cy)
-                if dist < CENTER_DISTANCE_THRESHOLD:
+                if math.hypot(cx - prev_cx, cy - prev_cy) < CENTER_DISTANCE_THRESHOLD:
                     assigned_color = tracked['color']
                     tracked['center'] = (cx, cy)
                     tracked['last_seen'] = frame_counter
@@ -143,10 +138,8 @@ while True:
                     'last_seen': frame_counter
                 })
 
-            # Draw rectangle around detected face
+            # Draw rectangle and apply pixelation to the face region
             cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), assigned_color, 2)
-
-            # Pixelate the face region
             face_roi = frame[y_min:y_max, x_min:x_max]
             if face_roi.size != 0:
                 small = cv2.resize(face_roi, (16, 16), interpolation=cv2.INTER_LINEAR)
@@ -158,12 +151,10 @@ while True:
             confidence_text = f"Face: {confidence * 100:.1f}%"
             text_x = x_min
             text_y = y_min - 10 if (y_min - 10) > 0 else y_min + 20
-            cv2.putText(
-                frame, confidence_text, (text_x, text_y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, assigned_color, 2, cv2.LINE_AA
-            )
+            cv2.putText(frame, confidence_text, (text_x, text_y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, assigned_color, 2, cv2.LINE_AA)
 
-    # Remove old faces
+    # Remove stale tracked faces
     tracked_faces = [
         f for f in tracked_faces
         if (frame_counter - f['last_seen']) <= MAX_MISSING_FRAMES
@@ -178,14 +169,12 @@ while True:
         screen_aspect = screen_w / screen_h
 
         if frame_aspect > screen_aspect:
-            # Frame is wider than the screen: scale height to match, then crop sides.
             new_h = screen_h
             new_w = int(new_h * frame_aspect)
             resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
             x_offset = (new_w - screen_w) // 2
             display_frame = resized_frame[:, x_offset:x_offset+screen_w]
         else:
-            # Frame is taller than the screen: scale width to match, then crop top/bottom.
             new_w = screen_w
             new_h = int(new_w / frame_aspect)
             resized_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
@@ -194,9 +183,48 @@ while True:
     else:
         display_frame = frame
 
-    cv2.imshow(window_name, display_frame)
+    # Use display_frame directly (no feedback effect)
+    combined_frame = display_frame
 
-    # ESC key to exit
+    # ---------------------------------------------------------
+    # Saturate blue hues and add enhanced artistic noise
+    # ---------------------------------------------------------
+    # Convert to HSV to work in the color space
+    hsv = cv2.cvtColor(combined_frame, cv2.COLOR_BGR2HSV)
+
+    # Define the blue hue range (tweak as needed)
+    lower_blue = np.array([90, 50, 50])
+    upper_blue = np.array([130, 255, 255])
+    blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+
+    # Increase saturation for blue pixels
+    saturation_factor = 1.5  # Increase saturation by 50%
+    hsv[:, :, 1] = np.where(blue_mask > 0,
+                             np.clip(hsv[:, :, 1].astype(np.float32) * saturation_factor, 0, 255),
+                             hsv[:, :, 1])
+    hsv = hsv.astype(np.uint8)
+    
+    # Convert back to BGR for noise addition
+    modified_frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+    # Add enhanced artistic Gaussian noise to blue pixels only
+    noise_strength = 50  # Standard deviation for Gaussian noise
+    noise = np.random.normal(0, noise_strength, modified_frame.shape).astype(np.int16)
+    
+    modified_frame = modified_frame.astype(np.int16)
+    blue_pixels = blue_mask > 0  # Boolean mask for blue pixels
+    for c in range(3):
+        channel = modified_frame[:, :, c]
+        channel[blue_pixels] += noise[:, :, c][blue_pixels]
+        channel[blue_pixels] = np.clip(channel[blue_pixels], 0, 255)
+        modified_frame[:, :, c] = channel
+    modified_frame = modified_frame.astype(np.uint8)
+    
+    combined_frame = modified_frame
+
+    cv2.imshow(window_name, combined_frame)
+
+    # Exit on ESC key
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
