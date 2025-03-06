@@ -3,6 +3,7 @@ import mediapipe as mp
 import math
 import random
 import numpy as np
+from datetime import datetime
 
 # -------------------------------------------------
 # 1) Configure second monitor offset (if you have one)
@@ -45,8 +46,8 @@ frame_counter = 0
 CENTER_DISTANCE_THRESHOLD = 50
 MAX_MISSING_FRAMES = 10
 
+# Generate a unique color
 def get_unique_color(used_colors):
-    """Generate a random color (BGR) not in used_colors."""
     while True:
         new_color = (
             random.randint(0, 255),
@@ -57,14 +58,7 @@ def get_unique_color(used_colors):
             return new_color
 
 def remove_gray_bar(frame, max_check_rows=50, std_threshold=10):
-    """
-    Examine the top rows of the frame and remove any that appear uniformly gray.
-    :param frame: The input image.
-    :param max_check_rows: Maximum number of top rows to check.
-    :param std_threshold: If the standard deviation of a row's pixels is below this,
-                          consider it part of the gray bar.
-    :return: The cropped frame.
-    """
+    """Examine the top rows of the frame and remove any that appear uniformly gray."""
     gray_bar_height = 0
     h = frame.shape[0]
     for i in range(min(max_check_rows, h)):
@@ -76,6 +70,67 @@ def remove_gray_bar(frame, max_check_rows=50, std_threshold=10):
     if gray_bar_height > 0:
         return frame[gray_bar_height:, :], gray_bar_height
     return frame, 0
+
+def add_cctv_overlay(frame, frame_counter):
+    """Add a CCTV-style overlay with timestamp, REC indicator, and noise."""
+    overlay = frame.copy()
+    height, width = frame.shape[:2]
+    
+    # Timestamp in top-left corner
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cv2.putText(overlay, timestamp, (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+    
+    # "REC" indicator in top-right corner (blinking every 30 frames)
+    if (frame_counter // 30) % 2 == 0:
+        cv2.putText(overlay, "REC", (width - 100, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.circle(overlay, (width - 30, 30), 8, (0, 0, 255), -1)
+    
+    # CCTV border
+    border_thickness = 10
+    cv2.rectangle(overlay, (border_thickness, border_thickness),
+                  (width - border_thickness, height - border_thickness),
+                  (255, 255, 255), 2)
+    
+    overlay_lines = overlay.copy()
+
+    # Draw the scan lines in light gray
+    '''for y in range(0, height, 20):
+        cv2.line(overlay_lines, (0, y), (width, y), (200, 200, 200), 1)  # Light gray color
+    '''
+    # Blend the overlay with the original frame (adjust opacity by changing alpha)
+    alpha = 0.3  # Opacity level (0 = fully transparent, 1 = fully visible)
+    cv2.addWeighted(overlay_lines, alpha, overlay, 1 - alpha, 0, overlay)
+    
+    # Grainy noise overlay
+    noise = np.random.randint(0, 50, frame.shape, dtype='uint8')
+    overlay = cv2.addWeighted(overlay, 0.98, noise, 0.02, 0)
+    
+    return overlay
+
+def add_cctv_overlay0(frame, frame_counter):
+    """Add a CCTV-style overlay with timestamp, REC indicator, and noise."""
+    overlay = frame.copy()
+    height, width = frame.shape[:2]
+    
+    
+    
+    overlay_lines = overlay.copy()
+
+    # Draw the scan lines in light gray
+    for y in range(0, height, 20):
+        cv2.line(overlay_lines, (0, y), (width, y), (200, 200, 200), 1)  # Light gray color
+    
+    # Blend the overlay with the original frame (adjust opacity by changing alpha)
+    alpha = 0.3  # Opacity level (0 = fully transparent, 1 = fully visible)
+    cv2.addWeighted(overlay_lines, alpha, overlay, 1 - alpha, 0, overlay)
+    
+    # Grainy noise overlay
+    noise = np.random.randint(0, 50, frame.shape, dtype='uint8')
+    overlay = cv2.addWeighted(overlay, 0.98, noise, 0.02, 0)
+    
+    return overlay
 
 # -------------------------------------------------
 # 5) Main Loop
@@ -99,6 +154,9 @@ while True:
     # Convert to RGB for MediaPipe processing
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_detection.process(rgb_frame)
+
+    # Create a transparent background with an alpha channel (RGBA)
+    black_background = np.zeros((frame.shape[0], frame.shape[1], 4), dtype=np.uint8)  # Transparent
 
     # Face Detection and Tracking
     if results.detections:
@@ -138,20 +196,18 @@ while True:
                     'last_seen': frame_counter
                 })
 
-            # Draw rectangle and apply pixelation to the face region
-            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), assigned_color, 2)
-            face_roi = frame[y_min:y_max, x_min:x_max]
-            if face_roi.size != 0:
-                small = cv2.resize(face_roi, (16, 16), interpolation=cv2.INTER_LINEAR)
-                pixelated = cv2.resize(small, (x_max - x_min, y_max - y_min), interpolation=cv2.INTER_NEAREST)
-                frame[y_min:y_max, x_min:x_max] = pixelated
+            # Draw rectangle and apply pixelation to the face region on the transparent background
+            cv2.rectangle(black_background, (x_min, y_min), (x_max, y_max), assigned_color, -1)  # Filled rectangle with alpha
+            cv2.rectangle(black_background, (x_min + 20, y_min + 20), (x_max + 20, y_max + 20), assigned_color, 5)  # Filled rectangle with alpha
+
+            
 
             # Confidence text
             confidence = detection.score[0] if detection.score else 0
             confidence_text = f"Face: {confidence * 100:.1f}%"
             text_x = x_min
             text_y = y_min - 10 if (y_min - 10) > 0 else y_min + 20
-            cv2.putText(frame, confidence_text, (text_x, text_y),
+            cv2.putText(black_background, confidence_text, (text_x, text_y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, assigned_color, 2, cv2.LINE_AA)
 
     # Remove stale tracked faces
@@ -159,6 +215,11 @@ while True:
         f for f in tracked_faces
         if (frame_counter - f['last_seen']) <= MAX_MISSING_FRAMES
     ]
+
+    # Apply CCTV overlay to the original frame
+        
+
+    frame_with_overlay = add_cctv_overlay0(frame, frame_counter)
 
     # ---------------------------------------------------------
     # "Cover" approach: Scale the frame to completely fill the screen,
@@ -181,48 +242,24 @@ while True:
             y_offset = (new_h - screen_h) // 2
             display_frame = resized_frame[y_offset:y_offset+screen_h, :]
     else:
-        display_frame = frame
+        display_frame = frame_with_overlay
 
-    # Use display_frame directly (no feedback effect)
-    combined_frame = display_frame
+    # Convert the frame to grayscale for display
+    gray_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2GRAY)
 
-    # ---------------------------------------------------------
-    # Saturate blue hues and add enhanced artistic noise
-    # ---------------------------------------------------------
-    # Convert to HSV to work in the color space
-    hsv = cv2.cvtColor(combined_frame, cv2.COLOR_BGR2HSV)
+    # Convert the grayscale frame back to a 3-channel frame for blending
+    gray_frame_colored = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2BGR)
 
-    # Define the blue hue range (tweak as needed)
-    lower_blue = np.array([90, 50, 50])
-    upper_blue = np.array([130, 255, 255])
-    blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+    # Blend the three frames (original, grayscale, and transparent background with squares)
+    combined_frame = cv2.addWeighted(display_frame, 0, gray_frame_colored, 1, 0)
+    combined_frame = cv2.addWeighted(combined_frame, 0.5, black_background[:, :, :3], 0.5, 0)
 
-    # Increase saturation for blue pixels
-    saturation_factor = 1.5  # Increase saturation by 50%
-    hsv[:, :, 1] = np.where(blue_mask > 0,
-                             np.clip(hsv[:, :, 1].astype(np.float32) * saturation_factor, 0, 255),
-                             hsv[:, :, 1])
-    hsv = hsv.astype(np.uint8)
-    
-    # Convert back to BGR for noise addition
-    modified_frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    frame_with_overlay = add_cctv_overlay(combined_frame, frame_counter)
 
-    # Add enhanced artistic Gaussian noise to blue pixels only
-    noise_strength = 50  # Standard deviation for Gaussian noise
-    noise = np.random.normal(0, noise_strength, modified_frame.shape).astype(np.int16)
-    
-    modified_frame = modified_frame.astype(np.int16)
-    blue_pixels = blue_mask > 0  # Boolean mask for blue pixels
-    for c in range(3):
-        channel = modified_frame[:, :, c]
-        channel[blue_pixels] += noise[:, :, c][blue_pixels]
-        channel[blue_pixels] = np.clip(channel[blue_pixels], 0, 255)
-        modified_frame[:, :, c] = channel
-    modified_frame = modified_frame.astype(np.uint8)
-    
-    combined_frame = modified_frame
 
-    cv2.imshow(window_name, combined_frame)
+    cv2.imshow(window_name, frame_with_overlay)
+
+
 
     # Exit on ESC key
     if cv2.waitKey(1) & 0xFF == 27:
