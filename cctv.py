@@ -36,7 +36,7 @@ face_detection = mp_face_detection.FaceDetection(
 # -------------------------------------------------
 # 3) Open Webcam
 # -------------------------------------------------
-cap = cv2.VideoCapture(0)  # Change index if needed
+cap = cv2.VideoCapture(1)  # Change index if needed
 
 # -------------------------------------------------
 # 4) Setup for Tracking Faces (unique color per person)
@@ -143,14 +143,14 @@ def add_logo_overlay(frame, logo_path):
     print(logo)
     
     # Resize the logo if necessary
-    logo_width = 300  # Desired logo width
+    logo_width = 250  # Desired logo width
     aspect_ratio = logo.shape[1] / logo.shape[0]
     logo_height = int(logo_width / aspect_ratio)
     logo_resized = cv2.resize(logo, (logo_width, logo_height))
     
     # Get the region of interest (ROI) for the logo's position (e.g., top-right corner)
-    roi_x = 20  # 10 pixels margin from the right edge
-    roi_y = height - 83  # 10 pixels margin from the top edge
+    roi_x = width - logo_width - 20 # 10 pixels margin from the right edge
+    roi_y = height - 73  # 10 pixels margin from the top edge
     
     # Get the logo's alpha channel if it exists (for transparency)
     if logo_resized.shape[2] == 4:
