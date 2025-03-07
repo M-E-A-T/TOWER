@@ -36,7 +36,7 @@ face_detection = mp_face_detection.FaceDetection(
 # -------------------------------------------------
 # 3) Open Webcam
 # -------------------------------------------------
-cap = cv2.VideoCapture(1)  # Change index if needed
+cap = cv2.VideoCapture(0)  # Change index if needed
 
 # -------------------------------------------------
 # 4) Setup for Tracking Faces (unique color per person)
@@ -132,6 +132,41 @@ def add_cctv_overlay0(frame, frame_counter):
     
     return overlay
 
+def add_logo_overlay(frame, logo_path):
+    """Add a logo overlay on the frame."""
+    overlay = frame.copy()
+    height, width = frame.shape[:2]
+    
+    # Load the logo image
+    logo = cv2.imread('media/logo_clear.png', cv2.IMREAD_UNCHANGED)  # Load with transparency if possible
+
+    print(logo)
+    
+    # Resize the logo if necessary
+    logo_width = 300  # Desired logo width
+    aspect_ratio = logo.shape[1] / logo.shape[0]
+    logo_height = int(logo_width / aspect_ratio)
+    logo_resized = cv2.resize(logo, (logo_width, logo_height))
+    
+    # Get the region of interest (ROI) for the logo's position (e.g., top-right corner)
+    roi_x = 20  # 10 pixels margin from the right edge
+    roi_y = height - 83  # 10 pixels margin from the top edge
+    
+    # Get the logo's alpha channel if it exists (for transparency)
+    if logo_resized.shape[2] == 4:
+        alpha_channel = logo_resized[:, :, 3] / 255.0  # Normalize alpha to [0, 1]
+        logo_resized = logo_resized[:, :, :3]  # Remove alpha from the logo
+    else:
+        alpha_channel = np.ones((logo_resized.shape[0], logo_resized.shape[1]))  # Fully opaque logo
+
+    # Create an overlay of the logo on the frame
+    for c in range(0, 3):
+        overlay[roi_y:roi_y+logo_resized.shape[0], roi_x:roi_x+logo_resized.shape[1], c] = (
+            alpha_channel * logo_resized[:, :, c] + (1 - alpha_channel) * overlay[roi_y:roi_y+logo_resized.shape[0], roi_x:roi_x+logo_resized.shape[1], c]
+        )
+
+    return overlay
+
 # -------------------------------------------------
 # 5) Main Loop
 # -------------------------------------------------
@@ -154,6 +189,8 @@ while True:
     # Convert to RGB for MediaPipe processing
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_detection.process(rgb_frame)
+
+    
 
     # Create a transparent background with an alpha channel (RGBA)
     black_background = np.zeros((frame.shape[0], frame.shape[1], 4), dtype=np.uint8)  # Transparent
@@ -200,6 +237,13 @@ while True:
             cv2.rectangle(black_background, (x_min, y_min), (x_max, y_max), assigned_color, -1)  # Filled rectangle with alpha
             cv2.rectangle(black_background, (x_min + 20, y_min + 20), (x_max + 20, y_max + 20), assigned_color, 5)  # Filled rectangle with alpha
 
+            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), assigned_color, 2)
+            face_roi = frame[y_min:y_max, x_min:x_max]
+            if face_roi.size != 0:
+                # Reduce the size more for stronger pixelation (e.g., 8x8 instead of 16x16)
+                small = cv2.resize(face_roi, (12, 12), interpolation=cv2.INTER_LINEAR)
+                pixelated = cv2.resize(small, (x_max - x_min, y_max - y_min), interpolation=cv2.INTER_NEAREST)
+                frame[y_min:y_max, x_min:x_max] = pixelated
             
 
             # Confidence text
@@ -256,8 +300,8 @@ while True:
 
     frame_with_overlay = add_cctv_overlay(combined_frame, frame_counter)
 
-
-    cv2.imshow(window_name, frame_with_overlay)
+    finalFrame = add_logo_overlay(frame_with_overlay, frame_counter)
+    cv2.imshow(window_name, finalFrame)
 
 
 
