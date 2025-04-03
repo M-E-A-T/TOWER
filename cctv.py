@@ -36,7 +36,7 @@ face_detection = mp_face_detection.FaceDetection(
 # -------------------------------------------------
 # 3) Open Webcam
 # -------------------------------------------------
-cap = cv2.VideoCapture(1)  # Change index if needed
+cap = cv2.VideoCapture(0)  # Change index if needed
 
 # -------------------------------------------------
 # 4) Setup for Tracking Faces (unique color per person)
