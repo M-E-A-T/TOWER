@@ -58,6 +58,7 @@ class HandDetector:
         self.prev_time = 0
         
         cv2.namedWindow("Hand Tracking", cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty("Hand Tracking", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     
     def process_frame(self, frame):
         # Convert to RGB for MediaPipe
@@ -84,7 +85,7 @@ class HandDetector:
             for landmark in hand_landmarks.landmark:
                 x = int(landmark.x * w)
                 y = int(landmark.y * h)
-                cv2.circle(display_frame, (x, y), 3, (255, 255, 255), -1)
+                cv2.circle(display_frame, (x, y), 3, (255, 255, 255), 3)
             
             connections = [
                 (self.WRIST, self.THUMB_TIP),
@@ -194,8 +195,8 @@ class HandDetector:
         self.hands.close()
 if __name__ == "__main__":
     detector = HandDetector(
-        capture_width=640,
-        capture_height=480,
+        capture_width=320,
+        capture_height=280,
         display_width=1920,
         display_height=1080,
         max_hands=1,

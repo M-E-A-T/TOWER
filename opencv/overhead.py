@@ -14,16 +14,24 @@ class MediaPipeHeadDetector:
         
         self.mp_face_detection = mp.solutions.face_detection
         self.face_detection = self.mp_face_detection.FaceDetection(
-            model_selection=1,  
-            min_detection_confidence=0.3  
+            model_selection=0,
+            min_detection_confidence=0.3
         )
         
         self.prev_frame_time = 0
         self.new_frame_time = 0
         
         self.tracked_faces = []
-        self.DISTANCE_THRESHOLD = 30
+        self.DISTANCE_THRESHOLD_SQUARED = 30 * 30
         self.MAX_TRACKED_FACES = 10
+        
+        np.random.seed(42)
+        self.precomputed_colors = [
+            (int(np.random.randint(180, 255)),
+             int(np.random.randint(180, 255)),
+             int(np.random.randint(180, 255)))
+            for _ in range(100)
+        ]
         
         cv2.namedWindow("Head Detection", cv2.WINDOW_NORMAL)
         cv2.setWindowProperty("Head Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -36,7 +44,6 @@ class MediaPipeHeadDetector:
         gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
         
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
         results = self.face_detection.process(rgb_frame)
         
         h, w = gray_bgr.shape[:2]
@@ -47,48 +54,44 @@ class MediaPipeHeadDetector:
                 
                 bbox = detection.location_data.relative_bounding_box
                 
-                x = int(bbox.xmin * w)
-                y = int(bbox.ymin * h)
+                x = max(0, int(bbox.xmin * w))
+                y = max(0, int(bbox.ymin * h))
                 width = int(bbox.width * w)
                 height = int(bbox.height * h)
                 
-                x = max(0, x)
-                y = max(0, y)
                 width = min(width, w - x)
                 height = min(height, h - y)
                 
                 if width <= 0 or height <= 0:
                     continue
                 
-                center_x = x + width // 2
-                center_y = y + height // 2
+                center_x = x + (width >> 1)
+                center_y = y + (height >> 1)
                 
                 face_matched = False
                 face_color = None
                 
                 for tracked_face in self.tracked_faces:
                     tracked_center_x, tracked_center_y = tracked_face['center']
-                    distance = np.sqrt((center_x - tracked_center_x)**2 + (center_y - tracked_center_y)**2)
+                    dx = center_x - tracked_center_x
+                    dy = center_y - tracked_center_y
+                    distance_squared = dx*dx + dy*dy
                     
-                    if distance < self.DISTANCE_THRESHOLD:
+                    if distance_squared < self.DISTANCE_THRESHOLD_SQUARED:
                         face_matched = True
                         face_color = tracked_face['color']
                         tracked_face['center'] = (center_x, center_y)
-                        tracked_face['last_seen'] = time.time()
+                        tracked_face['last_seen'] = current_time
                         break
                 
                 if not face_matched:
-                    np.random.seed(len(self.tracked_faces) + int(time.time()*1000) % 10000)
-                    face_color = (
-                        int(np.random.randint(180, 255)),
-                        int(np.random.randint(180, 255)),
-                        int(np.random.randint(180, 255))
-                    )
+                    color_idx = len(self.tracked_faces) % len(self.precomputed_colors)
+                    face_color = self.precomputed_colors[color_idx]
                     
                     self.tracked_faces.append({
                         'center': (center_x, center_y),
                         'color': face_color,
-                        'last_seen': time.time()
+                        'last_seen': current_time
                     })
                 
                 if len(self.tracked_faces) > self.MAX_TRACKED_FACES:
@@ -98,12 +101,12 @@ class MediaPipeHeadDetector:
                 try:
                     roi = gray_bgr[y:y+height, x:x+width]
                     if roi.size > 0:
-                        block_size = max(5, min(15, width // 10))
+                        block_size = max(5, min(15, width >> 3))
                         
                         h_roi, w_roi = roi.shape[:2]
                         temp_h, temp_w = h_roi // block_size, w_roi // block_size
                         
-                        small = cv2.resize(roi, (temp_w, temp_h), interpolation=cv2.INTER_LINEAR)
+                        small = cv2.resize(roi, (temp_w, temp_h), interpolation=cv2.INTER_NEAREST)
                         
                         pixelated = cv2.resize(small, (w_roi, h_roi), interpolation=cv2.INTER_NEAREST)
                         
@@ -135,9 +138,8 @@ class MediaPipeHeadDetector:
         fps = 1/(self.new_frame_time - self.prev_frame_time) if self.prev_frame_time else 0
         self.prev_frame_time = self.new_frame_time
         
-        # REMOVE AFTER TESTING
         cv2.putText(gray_bgr, f"FPS: {int(fps)}", (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         
         resized_frame = cv2.resize(gray_bgr, (self.display_width, self.display_height), 
                                   interpolation=cv2.INTER_LINEAR)
@@ -156,10 +158,7 @@ class MediaPipeHeadDetector:
             if not ret:
                 print("Failed to grab frame")
                 break
-            
-            display_frame = self.process_frame(frame)
-            
-            cv2.imshow("Head Detection", display_frame)
+            cv2.imshow("Head Detection", self.process_frame(frame))
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
