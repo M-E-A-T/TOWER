@@ -147,8 +147,8 @@ MIDIFunc.cc({ |src, chan, num, val|
 	};
 
 	if(chan == 2){
-		~normalize.value(src, 300, 20000).postln;  // prints approximately 0.5039
-		~sawtoothSynths.do { |synth| synth.set(\filterFreq, ~normalize.value(src, 300, 1000)); }	};
+		~normalize.value(src, 0, 1).postln;  // prints approximately 0.5039
+		~sampleLayerSynths.do { |synth| synth.set(\infVerb, ~normalize.value(src, 0, 1)); }	};
 
 	/*
     ("CC - Source: " ++ src ++ ", Channel: " ++ chan ++
@@ -160,7 +160,6 @@ MIDIFunc.cc({ |src, chan, num, val|
 MIDIFunc.noteOn({ |src, chan, note, vel|
 	"hand found".postln;
 	~sampleLayerSynths.do { |synth| synth.set(\volume, 1)};
-	~sawtoothSynths.do { |synth| synth.set(\volume, 1)};
 
 
     /*("Note On - Source: " ++ src ++ ", Channel: " ++ chan ++
@@ -171,7 +170,6 @@ MIDIFunc.noteOn({ |src, chan, note, vel|
 MIDIFunc.noteOff({ |src, chan, note, vel|
 	"hand missing".postln;
 	~sampleLayerSynths.do { |synth| synth.set(\volume, 0)};
-	~sawtoothSynths.do { |synth| synth.set(\volume, 0)};
 
 
     /*("Note Off - Source: " ++ src ++ ", Channel: " ++ chan ++
