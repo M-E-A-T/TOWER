@@ -174,7 +174,7 @@ if __name__ == "__main__":
     detector = MediaPipeHeadDetector(
         capture_width=320,
         capture_height=240,
-        display_width=1920,
-        display_height=1080
+        display_width=25600,
+        display_height=1440
     )
     detector.run()
