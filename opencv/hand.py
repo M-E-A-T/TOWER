@@ -181,11 +181,11 @@ class HandDetector:
                     # For hand presence - send Note On only when hand first appears
                     if not self.hand_present_last_frame:
                         self.midi_out.send(mido.Message('note_on', note=60, velocity=100))
-                        print("Note On sent - Hand detected")
+                        print("Target found... M.E.A.T.")
                         self.hand_present_last_frame = True
                     
                     if frame_count % 10 == 0:  # Log only occasionally to avoid console spam
-                        print(f"MIDI CC sent - X: {midi_x}, Y: {midi_y}")
+                        print(f"Tracking target: {midi_x}, {midi_y}")
                 except Exception as e:
                     print(f"MIDI error: {e}")
             elif self.midi_out:
@@ -193,7 +193,7 @@ class HandDetector:
                 if self.hand_present_last_frame:
                     try:
                         self.midi_out.send(mido.Message('note_off', note=60, velocity=0))
-                        print("Note Off sent - Hand lost")
+                        print("Target lost... M.E.A.T.")
                         self.hand_present_last_frame = False
                     except Exception as e:
                         print(f"MIDI error: {e}")
