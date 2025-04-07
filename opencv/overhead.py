@@ -4,7 +4,7 @@ import numpy as np
 import time
 
 class MediaPipeHeadDetector:
-    def __init__(self, capture_width=320, capture_height=240, display_width=1920, display_height=1080):
+    def __init__(self, capture_width=320, capture_height=240, display_width=2560, display_height=1440):
         self.cap = cv2.VideoCapture(0)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, capture_width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, capture_height)
