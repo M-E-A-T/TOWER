@@ -61,6 +61,7 @@ class HandDetector:
         cv2.setWindowProperty("Hand Tracking", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     
     def process_frame(self, frame):
+
         # Convert to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
@@ -76,6 +77,10 @@ class HandDetector:
         """Process results and draw landmarks"""
         hand_position = None
         display_frame = frame.copy()
+
+        display_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2GRAY)
+       
+
         
         if results.multi_hand_landmarks:
             hand_landmarks = results.multi_hand_landmarks[0]
@@ -123,10 +128,17 @@ class HandDetector:
         
         print("Press 'q' to quit")
         
+        skip_frames = 2 
         frame_count = 0
+
         
         while True:
-            frame_count += 1
+            #frame_count += 1
+            
+
+            #if frame_count % (skip_frames + 1) != 0:
+                #continue
+
             
             ret, frame = self.cap.read()
             if not ret:

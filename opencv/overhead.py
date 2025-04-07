@@ -131,15 +131,15 @@ class MediaPipeHeadDetector:
                 text_x = rect_x
                 text_y = max(20, rect_y - 10)
                 conf_pct = int(confidence * 100)
-                conf_text = f"Conf: {conf_pct}%"
+                conf_text = f"Face: {conf_pct}%"
                 cv2.putText(gray_bgr, conf_text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, face_color, 1)
         
         self.new_frame_time = time.time()
         fps = 1/(self.new_frame_time - self.prev_frame_time) if self.prev_frame_time else 0
         self.prev_frame_time = self.new_frame_time
         
-        cv2.putText(gray_bgr, f"FPS: {int(fps)}", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        #cv2.putText(gray_bgr, f"FPS: {int(fps)}", (10, 30), 
+         #           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         
         resized_frame = cv2.resize(gray_bgr, (self.display_width, self.display_height), 
                                   interpolation=cv2.INTER_LINEAR)
