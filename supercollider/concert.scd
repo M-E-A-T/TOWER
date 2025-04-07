@@ -46,24 +46,25 @@ SynthDef(\baseLayer, {
 }).add;
 
 SynthDef(\sampleLayer, {
-	 | buf, out = 0, volume = 0, pitchRatio = 1|
+	 | buf, out = 0, volume = 0, pitchRatio = 1, infVerb = 0|
 
-    var sound, finalSound;
+    var sound, finalSound, reverb;
 
     // Play the buffer
     sound = PlayBuf.ar(2, buf, loop: 1);
 
 	finalSound = PitchShift.ar(sound,0.2, pitchRatio, 0.0, 0.0, 1.0, 0.0);
 
+	reverb = FreeVerb.ar(finalSound, infVerb, infVerb, 0.3);
 
     // Output to specified channel
-    Out.ar(out, finalSound * volume * 1.2); // Scale down the output level
+    Out.ar(out, reverb * volume * 1.2); // Scale down the output level
 
 
 }).add;
 
 SynthDef(\sawtooth, {
-	 | buf, out = 0, volume = 0, filterFreq = 1000|
+	 | buf, out = 0, volume = 0, filterFreq = 1000, infVerb = 0|
 
     var sound, reverb;
 
@@ -110,14 +111,14 @@ DECLARE AND INSTANTIATE CONTROLS
 
 //feedback, damping
 
-n=EZSlider(nil, 300@42,"  pitchShift pitchRatio  ", ControlSpec.new(0.5, 1.5, step:0.1));
+n=EZSlider(nil, 300@42,"  pitchShift pitchRatio  ", ControlSpec.new(0.5, 1.0, step:0.1));
 
 n.action_({ |ez| ~sampleLayerSynths.do { |synth| synth.set(\pitchRatio, ez.value); }});
 
 
-m=EZSlider(nil, 300@42,"  pitchShift filterFreq  ", ControlSpec.new(30, 1000, step:10));
+m=EZSlider(nil, 300@42,"  pitchShift ifnVerb  ", ControlSpec.new(0, 2.5, step:0.1));
 
-m.action_({ |ez| ~sawtoothSynths.do { |synth| synth.set(\filterFreq, ez.value); }});
+m.action_({ |ez| ~sampleLayerSynths.do { |synth| synth.set(\infVerb, ez.value); }});
 
 o=EZSlider(nil, 300@42,"  sample off/on  ", ControlSpec.new(0, 1, step:1));
 
@@ -146,8 +147,8 @@ MIDIFunc.cc({ |src, chan, num, val|
 	};
 
 	if(chan == 2){
-		~normalize.value(src, 300, 20000).postln;  // prints approximately 0.5039
-		~sawtoothSynths.do { |synth| synth.set(\filterFreq, ~normalize.value(src, 300, 1000)); }	};
+		~normalize.value(src, 0, 1).postln;  // prints approximately 0.5039
+		~sampleLayerSynths.do { |synth| synth.set(\infVerb, ~normalize.value(src, 0, 1)); }	};
 
 	/*
     ("CC - Source: " ++ src ++ ", Channel: " ++ chan ++
@@ -159,7 +160,6 @@ MIDIFunc.cc({ |src, chan, num, val|
 MIDIFunc.noteOn({ |src, chan, note, vel|
 	"hand found".postln;
 	~sampleLayerSynths.do { |synth| synth.set(\volume, 1)};
-	~sawtoothSynths.do { |synth| synth.set(\volume, 1)};
 
 
     /*("Note On - Source: " ++ src ++ ", Channel: " ++ chan ++
@@ -170,7 +170,6 @@ MIDIFunc.noteOn({ |src, chan, note, vel|
 MIDIFunc.noteOff({ |src, chan, note, vel|
 	"hand missing".postln;
 	~sampleLayerSynths.do { |synth| synth.set(\volume, 0)};
-	~sawtoothSynths.do { |synth| synth.set(\volume, 0)};
 
 
     /*("Note Off - Source: " ++ src ++ ", Channel: " ++ chan ++
